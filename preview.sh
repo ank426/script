@@ -67,7 +67,6 @@ case "$mime_type" in
                     printf "$BOLD%-10s$RESET %s\n" "Format:" "$col1"
                     printf "$BOLD%-10s$RESET %s\n" "Duration:" "$dur"
                     printf "$BOLD%-10s$RESET %s\n" "Size:" "$size"
-                    printf '\n'
                     ;;
                 VID) printf "$BOLD%-10s$RESET %s @ %s fps\n" "Video:" "$col2" "$col3" ;;
                 AUD) printf "$BOLD%-10s$RESET %s (%skHz %s)\n" "Audio:" "$col2" "$col3" "$col4" ;;
@@ -102,7 +101,7 @@ case "$mime_type" in
         trap 'rm -rf "$tmpdir"' EXIT
         loffice --headless --convert-to jpg --outdir "$tmpdir" "$1" >/dev/null
         disp_img "$tmpdir/$(basename "${1%.*}").jpg"
-        pages=$(unzip -p "$1" docProps/app.xml | sed -n 's/.*<Pages>\([^<]*\)<\/Pages>.*/\1/p')
+        pages=$(unzip -p "$1" docProps/app.xml | sed --quiet 's/.*<Pages>\([^<]*\)<\/Pages>.*/\1/p')
         echo -e "${BLUE_BOLD}DOCX$RESET $pages pages $size"
         ;;
 
@@ -111,7 +110,7 @@ case "$mime_type" in
         trap 'rm -rf "$tmpdir"' EXIT
         loffice --headless --convert-to jpg --outdir "$tmpdir" "$1" >/dev/null
         disp_img "$tmpdir/$(basename "${1%.*}").jpg"
-        pages=$(unzip -p "$1" meta.xml | sed -n 's/.*meta:page-count="\([^"]*\)".*/\1/p')
+        pages=$(unzip -p "$1" meta.xml | sed --quiet 's/.*meta:page-count="\([^"]*\)".*/\1/p')
         echo -e "${BLUE_BOLD}ODT$RESET $pages pages $size"
         ;;
 
