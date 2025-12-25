@@ -1,16 +1,19 @@
 #!/bin/sh
 
+set -eu
+
 if [ "${LF_LEVEL:-0}" -gt 0 ] && [ "$#" -eq 6 ] && [ "$6" = "preview" ]; then # most likely lf
     img_size="$2x$3"
 else
     img_size="$(tput cols)x$(tput lines)"
 fi
+
 disp_img() {
-    chafa --format sixel --scale max --view-size $img_size --threshold 1 $2 "$1" # threshold needed for lf to not have strip of prev image
+    chafa --format sixel --scale max --view-size $img_size --threshold 1 ${2:-} "$1" # threshold needed for lf to not have strip of prev image
 }
 
 
-[ -z "$1" ] && exit 1
+[ -n "$1" ]
 [ -d "$1" ] || [ -f "$1" ] || (echo "Not Found: $1" && exit 1)
 
 if [ -d "$1" ]; then
@@ -18,8 +21,8 @@ if [ -d "$1" ]; then
     exit 0
 fi
 
-mime_type=$(file --brief --mime-type --dereference "$1" 2>/dev/null || exit 1)
-size=$(stat --format %s "$1" 2>/dev/null || stat -f %z "$1" 2>/dev/null || exit 1)
+mime_type=$(file --brief --mime-type --dereference "$1")
+size=$( ( stat --format %s "$1" || stat -f %z "$1" ) | numfmt --to iec)
 
 case "$mime_type" in
     inode/x-empty)
@@ -41,7 +44,7 @@ case "$mime_type" in
             cmd = "numfmt --to iec " $3
             cmd | getline hr
             close(cmd)
-            printf "\033[94m%s\033[0m %s %s\n", $1, $2, hr
+            printf "\033[1;94m%s\033[0m %s %s\n", $1, $2, hr
         }'
         ;;
 
@@ -57,7 +60,7 @@ case "$mime_type" in
                 close(cmd)
             }
             END {
-                printf "\033[94mPDF\033[0m %s pages %s\n", pages, size
+                printf "\033[1;94mPDF\033[0m %s pages %s\n", pages, size
             }
         '
         rm "$tmpfile.jpg"
@@ -67,7 +70,7 @@ case "$mime_type" in
         tmpdir=$(mktemp -d)
         loffice --headless --convert-to jpg --outdir "$tmpdir" "$1" >/dev/null
         disp_img "$tmpdir/$(basename "${1%.*}").jpg"
-        echo -e "\033[94mDOCX\033[0m $(unzip -p "$1" docProps/app.xml | grep -oP '(?<=<Pages>)[^<]+') pages $(numfmt --to iec $size)\n"
+        echo -e "\033[1;94mDOCX\033[0m $(unzip -p "$1" docProps/app.xml | grep -oP '(?<=<Pages>)[^<]+') pages $size\n"
         rm -rf "$tmpdir"
         ;;
 
@@ -75,7 +78,7 @@ case "$mime_type" in
         tmpdir=$(mktemp -d)
         loffice --headless --convert-to jpg --outdir "$tmpdir" "$1" >/dev/null
         disp_img "$tmpdir/$(basename "${1%.*}").jpg"
-        echo -e "\033[94mODT\033[0m $(unzip -p "$1" meta.xml | grep -oP 'meta:page-count="\K[^"]+') pages $(numfmt --to iec $size)\n"
+        echo -e "\033[1;94mODT\033[0m $(unzip -p "$1" meta.xml | grep -oP 'meta:page-count="\K[^"]+') pages $size\n"
         rm -rf "$tmpdir"
         ;;
 
