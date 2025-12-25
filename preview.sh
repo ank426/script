@@ -63,7 +63,7 @@ case "$mime_type" in
                 HEAD)
                     dur=$(echo "$col2" | sed -e 's/^0://' -e 's/\..*$//')
                     size=$(numfmt --to iec "$col3")
-                    echo "${BLUE_BOLD}Video File$RESET"
+                    echo -e "${BLUE_BOLD}Video File$RESET"
                     printf "$BOLD%-10s$RESET %s\n" "Format:" "$col1"
                     printf "$BOLD%-10s$RESET %s\n" "Duration:" "$dur"
                     printf "$BOLD%-10s$RESET %s\n" "Size:" "$size"
@@ -102,8 +102,8 @@ case "$mime_type" in
         trap 'rm -rf "$tmpdir"' EXIT
         loffice --headless --convert-to jpg --outdir "$tmpdir" "$1" >/dev/null
         disp_img "$tmpdir/$(basename "${1%.*}").jpg"
-        pages=$(unzip -p "$1" docProps/app.xml | grep -oP '(?<=<Pages>)[^<]+')
-        echo "${BLUE_BOLD}DOCX$RESET $pages pages $size"
+        pages=$(unzip -p "$1" docProps/app.xml | sed -n 's/.*<Pages>\([^<]*\)<\/Pages>.*/\1/p')
+        echo -e "${BLUE_BOLD}DOCX$RESET $pages pages $size"
         ;;
 
     application/vnd.oasis.opendocument.text)
@@ -111,22 +111,22 @@ case "$mime_type" in
         trap 'rm -rf "$tmpdir"' EXIT
         loffice --headless --convert-to jpg --outdir "$tmpdir" "$1" >/dev/null
         disp_img "$tmpdir/$(basename "${1%.*}").jpg"
-        pages=$(unzip -p "$1" meta.xml | grep -oP 'meta:page-count="\K[^"]+')
-        echo "${BLUE_BOLD}ODT$RESET $pages pages $size"
+        pages=$(unzip -p "$1" meta.xml | sed -n 's/.*meta:page-count="\([^"]*\)".*/\1/p')
+        echo -e "${BLUE_BOLD}ODT$RESET $pages pages $size"
         ;;
 
     application/zip | application/x-zip*)
-        echo "$BLUE_BOLD$mime_type$RESET"
+        echo -e "$BLUE_BOLD$mime_type$RESET"
         unzip -l "$1" | tail -n +2
         ;;
 
     application/x-tar | application/x-gzip | application/x-bzip2)
-        echo "$BLUE_BOLD$mime_type$RESET"
+        echo -e "$BLUE_BOLD$mime_type$RESET"
         tar tf "$1"
         ;;
 
     *)
-        echo "${BLUE_BOLD}Binary File$RESET"
+        echo -e "${BLUE_BOLD}Binary File$RESET"
         echo "Type: $mime_type"
         echo "Size: $size"
         ;;
