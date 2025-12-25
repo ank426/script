@@ -2,19 +2,25 @@
 
 set -eu
 
+BLUE_BOLD='\033[1;94m'
+BOLD='\033[1m'
+RESET='\033[0m'
+
 if [ "${LF_LEVEL:-0}" -gt 0 ] && [ "$#" -eq 6 ] && [ "$6" = "preview" ]; then # most likely lf
-    img_size="$2x$3"
+    w="$2"
+    h="$3"
 else
-    img_size="$(tput cols)x$(tput lines)"
+    w="$(tput cols)"
+    h="$(tput lines)"
 fi
 
 disp_img() {
-    chafa --format sixel --scale max --view-size $img_size --threshold 1 ${2:-} "$1" # threshold needed for lf to not have strip of prev image
+    # threshold needed for lf to not have strip of prev image
+    chafa --format sixel --scale max --view-size "$w"x"$h" --threshold 1 ${2:-} "$1"
 }
 
-
 [ -n "$1" ]
-[ -d "$1" ] || [ -f "$1" ] || (echo "Not Found: $1" && exit 1)
+[ -e "$1" ] || (echo "Not Found: $1" && exit 1)
 
 if [ -d "$1" ]; then
     LC_COLLATE=C ls --almost-all --color --format=commas --group-directories-first "$1" | tr ',' ' '
@@ -29,72 +35,99 @@ case "$mime_type" in
         ;;
 
     text/*)
-        bat --color=always --style=plain "$1"
+        # glow won't color to pipe cuz of bug
+        bat --terminal-width "$w" --color=always --style=plain "$1"
+        ;;
+
+    application/json)
+        jq --color-output '.' "$1"
         ;;
 
     video/*)
-        echo -e "\033[1;94m$mime_type\033[0m"
-        ffprobe -loglevel quiet -show_format "$1" | tail -n +2 | sed '$d'
+        ffprobe -loglevel quiet -print_format json -show_format -show_streams -sexagesimal "$1" | \
+        jq --raw-output '
+            "HEAD|\(.format.format_long_name)|\(.format.duration)|\(.format.size)",
+            (.streams[] | select(.codec_type == "video") |
+                (.r_frame_rate | split("/") | map(tonumber) | .[0] / .[1]) as $fps |
+                "VID|\(.index)|\(.width)x\(.height)|\($fps * 100 | round / 100)"),
+            (.streams[] | select(.codec_type == "audio") |
+                (.sample_rate | tonumber / 1000 | floor) as $khz |
+                "AUD|\(.index)|\(.tags.language // "und")|\($khz)|\(.channel_layout)"),
+            ( [.streams[] | select(.codec_type == "subtitle")] |
+              if length > 0 then
+                "SUB|\(length)|\(map(.tags.language // "und") | join(", "))"
+              else empty end )
+        ' | \
+        while IFS="|" read -r type col1 col2 col3 col4; do
+            case "$type" in
+                HEAD)
+                    dur=$(echo "$col2" | sed -e 's/^0://' -e 's/\..*$//')
+                    size=$(numfmt --to iec "$col3")
+                    echo "${BLUE_BOLD}Video File$RESET"
+                    printf "$BOLD%-10s$RESET %s\n" "Format:" "$col1"
+                    printf "$BOLD%-10s$RESET %s\n" "Duration:" "$dur"
+                    printf "$BOLD%-10s$RESET %s\n" "Size:" "$size"
+                    printf '\n'
+                    ;;
+                VID) printf "$BOLD%-10s$RESET %s @ %s fps\n" "Video:" "$col2" "$col3" ;;
+                AUD) printf "$BOLD%-10s$RESET %s (%skHz %s)\n" "Audio:" "$col2" "$col3" "$col4" ;;
+                SUB) printf "$BOLD%-10s$RESET %s\n" "Subs [$col1]:" "$col2" ;;
+            esac
+        done
         ;;
 
     image/*)
         disp_img "$1" # putting something above images causes weird bugs in fzf
-        identify -ping -format '%m %G %B' "$1" |
-            awk '{
-            cmd = "numfmt --to iec " $3
-            cmd | getline hr
-            close(cmd)
-            printf "\033[1;94m%s\033[0m %s %s\n", $1, $2, hr
+        identify -ping -format '%m %G %B' "$1" | \
+        awk -v c="$BLUE_BOLD" -v r="$RESET" '{
+            "numfmt --to iec " $3 | getline hr
+            printf "%s%s%s %s %s\n", c, $1, r, $2, hr
         }'
         ;;
 
     application/pdf)
-        tmpfile=$(mktemp)
-        pdftoppm -f 1 -l 1 -singlefile -scale-to-x 1920 -scale-to-y -1 -jpeg -- "$1" "$tmpfile"
-        disp_img "$tmpfile.jpg"
-        pdfinfo "$1" | awk '
+        tmpfile=$(mktemp).jpg
+        trap 'rm -f "$tmpfile"' EXIT
+        pdftoppm -f 1 -l 1 -singlefile -scale-to-x 1920 -scale-to-y -1 -jpeg -- "$1" "${tmpfile%.jpg}"
+        disp_img "$tmpfile"
+        pdfinfo "$1" | awk -v c="$BLUE_BOLD" -v r="$RESET" '
             /^Pages:/ { pages = $2 }
-            /^File size:/ {
-                cmd = "numfmt --to iec " $3
-                cmd | getline size
-                close(cmd)
-            }
-            END {
-                printf "\033[1;94mPDF\033[0m %s pages %s\n", pages, size
-            }
+            /^File size:/ { "numfmt --to iec" $3 | getline size }
+            END { printf "%sPDF%s %s pages %s\n", c, r, pages, size }
         '
-        rm "$tmpfile.jpg"
         ;;
 
     application/vnd.openxmlformats-officedocument.wordprocessingml.document)
         tmpdir=$(mktemp -d)
+        trap 'rm -rf "$tmpdir"' EXIT
         loffice --headless --convert-to jpg --outdir "$tmpdir" "$1" >/dev/null
         disp_img "$tmpdir/$(basename "${1%.*}").jpg"
-        echo -e "\033[1;94mDOCX\033[0m $(unzip -p "$1" docProps/app.xml | grep -oP '(?<=<Pages>)[^<]+') pages $size\n"
-        rm -rf "$tmpdir"
+        pages=$(unzip -p "$1" docProps/app.xml | grep -oP '(?<=<Pages>)[^<]+')
+        echo "${BLUE_BOLD}DOCX$RESET $pages pages $size"
         ;;
 
     application/vnd.oasis.opendocument.text)
         tmpdir=$(mktemp -d)
+        trap 'rm -rf "$tmpdir"' EXIT
         loffice --headless --convert-to jpg --outdir "$tmpdir" "$1" >/dev/null
         disp_img "$tmpdir/$(basename "${1%.*}").jpg"
-        echo -e "\033[1;94mODT\033[0m $(unzip -p "$1" meta.xml | grep -oP 'meta:page-count="\K[^"]+') pages $size\n"
-        rm -rf "$tmpdir"
+        pages=$(unzip -p "$1" meta.xml | grep -oP 'meta:page-count="\K[^"]+')
+        echo "${BLUE_BOLD}ODT$RESET $pages pages $size"
         ;;
 
     application/zip | application/x-zip*)
-        echo -e "\033[1;94m$mime_type\033[0m"
+        echo "$BLUE_BOLD$mime_type$RESET"
         unzip -l "$1" | tail -n +2
         ;;
 
     application/x-tar | application/x-gzip | application/x-bzip2)
-        echo -e "\033[1;94m$mime_type\033[0m"
+        echo "$BLUE_BOLD$mime_type$RESET"
         tar tf "$1"
         ;;
 
     *)
-        echo -e "\033[1;94mBinary File\033[0m"
+        echo "${BLUE_BOLD}Binary File$RESET"
         echo "Type: $mime_type"
-        echo "Size: $size bytes"
+        echo "Size: $size"
         ;;
 esac
