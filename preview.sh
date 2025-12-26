@@ -114,18 +114,34 @@ case "$mime_type" in
         echo -e "${BLUE_BOLD}ODT$RESET $pages pages $size"
         ;;
 
-    application/zip | application/x-zip*)
-        echo -e "$BLUE_BOLD$mime_type$RESET"
-        unzip -l "$1" | tail -n +2
-        ;;
-
-    application/x-tar | application/x-gzip | application/x-bzip2)
-        echo -e "$BLUE_BOLD$mime_type$RESET"
-        tar tf "$1"
+    application/zip | application/x-zip* \
+    | application/x-7z* \
+    | application/vnd.rar | application/x-rar* \
+    | application/x-tar \
+    | application/gzip | application/x-gzip \
+    | application/x-bzip* \
+    | application/x-xz \
+    | application/x-lz* | application/lz4 \
+    | application/zstd \
+    | application/x-brotli \
+    | application/x-snappy*)
+        type=$(file --brief --dereference "$1" | awk '{print toupper($1)}')
+        echo -e "$BLUE_BOLD$type$RESET $size"
+        ouch --yes list "$1" 2>/dev/null \
+            | sed '1s/.*//' \
+            | tree -C --fromfile \
+            | awk '
+                { lines[NR] = $0 }
+                END {
+                    print lines[NR]
+                    for (i = 1; i < NR; i++) print lines[i]
+                }
+            '
         ;;
 
     *)
-        echo -e "${BLUE_BOLD}Binary File$RESET"
+        echo -e "${BLUE_BOLD}Unknown File Type$RESET"
+        file --brief --dereference "$1"
         echo "Type: $mime_type"
         echo "Size: $size"
         ;;
