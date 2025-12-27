@@ -9,6 +9,7 @@ trap "rm -rf '$LO_TEMP_DIR'" EXIT
 cp -r "$XDG_CONFIG_HOME/libreoffice/"* $LO_TEMP_DIR # it might be better to save a minimal profile for this
 
 (
+    exec 10< "$XDG_DATA_HOME/../script/seccomp/bwrap-tiocsti.bpf"
     exec bwrap \
         --ro-bind / / \
         --tmpfs /tmp \
@@ -19,6 +20,6 @@ cp -r "$XDG_CONFIG_HOME/libreoffice/"* $LO_TEMP_DIR # it might be better to save
         --proc /proc \
         --dev /dev \
         --unshare-all \
-        --new-session \
+        --seccomp 10 \
         "$XDG_DATA_HOME/../script/_preview.sh" "$@"
 )
