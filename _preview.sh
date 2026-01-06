@@ -23,12 +23,12 @@ disp_img() {
 [ -e "$1" ] || (echo "Not Found: $1" && exit 1)
 
 if [ -d "$1" ]; then
-    LC_COLLATE=C ls --almost-all --color --format=commas --group-directories-first "$1" | tr ',' ' '
+    LC_COLLATE=C gls -A --color --format=commas --group-directories-first "$1" | tr ',' ' '
     exit 0
 fi
 
 mime_type=$(file --brief --mime-type --dereference "$1")
-size=$( ( stat --format %s "$1" || stat -f %z "$1" ) | numfmt --to iec)
+size=$( ( stat --format %s "$1" 2>/dev/null || stat -f %z "$1" ) | numfmt --to iec)
 
 case "$mime_type" in
     inode/x-empty)
