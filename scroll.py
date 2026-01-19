@@ -17,6 +17,7 @@ HTML_CONTENT = '''
           margin: 0;
           height: 100%;
           background: black;
+          user-select: none;
         }
         #status {
           color: white;
