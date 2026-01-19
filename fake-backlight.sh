@@ -1,6 +1,6 @@
 #!/bin/sh
 
-state_path=/tmp/fake-backlight
+state_path="/tmp/fake-backlight-$EUID"
 [ -f $state_path ] && fbl=$(cat $state_path) || fbl=100
 
 case $1 in
@@ -11,7 +11,7 @@ case $1 in
 		[ $fbl -eq 100 ] || echo $((($fbl + 5) / 10))
 		;;
 	set)
-		pgrep -x gammastep > /dev/null && killall gammastep
+		pgrep -u "$EUID" -x gammastep > /dev/null && pkill -u "$EUID" -x gammastep
 		fbl=$(($fbl + $2))
 		if [ $fbl -ge 100 ]; then
 			[ ! -f $state_path ] || rm $state_path
