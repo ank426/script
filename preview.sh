@@ -4,10 +4,10 @@ set -euo pipefail
 
 # loffice is kinda bloat and does some weird cache shit and also needs to write to it
 # so making it generate new cache every time would be too slow, but giving it write access would let it write malicious scripts, etc
-LO_TEMP_DIR=$(mktemp -d)
-trap "rm -rf '$LO_TEMP_DIR'" EXIT
-if [ -d "$XDG_CONFIG_HOME/libreoffice" ] && ls -A "$XDG_CONFIG_HOME/libreoffice" >/dev/null 2>&1; then
-    cp -r "$XDG_CONFIG_HOME/libreoffice/"* $LO_TEMP_DIR # it might be better to save a minimal profile for this
+LO_TEMP_DIR=$(mktemp --directory)
+trap "rm --recursive --force '$LO_TEMP_DIR'" EXIT
+if [ -d "$XDG_CONFIG_HOME/libreoffice" ] && ls --almost-all "$XDG_CONFIG_HOME/libreoffice" >/dev/null 2>&1; then
+    cp --recursive "$XDG_CONFIG_HOME/libreoffice/"* $LO_TEMP_DIR # it might be better to save a minimal profile for this
 fi
 
 (
@@ -17,7 +17,7 @@ fi
         --tmpfs /tmp \
         --tmpfs "$HOME" \
         --bind "$LO_TEMP_DIR" "$XDG_CONFIG_HOME/libreoffice" \
-        --ro-bind "$(realpath "$1")" "$(realpath "$1")" \
+        --ro-bind "$(realpath --no-symlinks "$1")" "$(realpath --no-symlinks "$1")" \
         --ro-bind "$XDG_DATA_HOME/../script/_preview.sh" "$XDG_DATA_HOME/../script/_preview.sh" \
         --proc /proc \
         --dev /dev \
