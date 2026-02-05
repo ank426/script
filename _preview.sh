@@ -28,7 +28,7 @@ if [ -d "$1" ]; then
 fi
 
 mime_type=$(file --brief --mime-type --dereference "$1")
-size=$(stat --format %s "$1" | numfmt --to iec)
+size=$(stat -f %z "$1" | numfmt --to iec)
 
 case "$mime_type" in
     inode/x-empty)
