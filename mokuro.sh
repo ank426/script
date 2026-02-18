@@ -49,5 +49,5 @@ for path in "$@"; do
           | gsub("．．"; if $v then "︰" else "‥" end)
         ]
       ]]
-    ' "$mokuro_file" > "${mokuro_file}.tmp" && mv "${mokuro_file}.tmp" "$mokuro_file"
+    ' "$mokuro_file" > "$mokuro_file.tmp" && mv "$mokuro_file.tmp" "$mokuro_file"
 done
