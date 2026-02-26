@@ -2,11 +2,6 @@
 
 set -eu
 
-if [ ! -e "$HOME/.cache" ]; then
-    ln -s "$XDG_CACHE_HOME" "$HOME/.cache"
-    trap 'rm "$HOME/.cache"' EXIT
-fi
-
 mokuro_flags=''
 for arg in "$@"; do
     case "$arg" in -*) mokuro_flags="$mokuro_flags $arg" ;; esac
