@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import struct
+import asyncio, struct
 from aiohttp import web
 from evdev import UInput, ecodes as e
 
@@ -24,12 +24,16 @@ HTML = '''
         fs.onclick = () =>
             document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
 
-        const ws = new WebSocket('ws://' + location.host + '/ws');
-        ws.onopen = () => { st.innerText = '' };
-        ws.onclose = () => { st.innerText = '⚠' };
-        ws.onerror = () => ws.close();
+        let ws;
+        function connect() {
+            ws = new WebSocket('ws://' + location.host + '/ws');
+            ws.onopen = () => { st.innerText = '' };
+            ws.onclose = () => { st.innerText = '⚠'; setTimeout(connect, 1000) };
+            ws.onerror = () => ws.close();
+        }
+        connect();
 
-        let lastY = null;
+        let lastY = null, pending = 0;
         const buf = new Float32Array(1);
 
         document.addEventListener('touchstart', e => {
@@ -39,13 +43,17 @@ HTML = '''
         document.addEventListener('touchmove', e => {
             e.preventDefault();
             if (lastY !== null && e.touches.length === 1 && ws.readyState === 1) {
-                buf[0] = e.touches[0].clientY - lastY;
+                pending += e.touches[0].clientY - lastY;
                 lastY = e.touches[0].clientY;
-                ws.send(buf.buffer);
+                if (ws.bufferedAmount === 0) {
+                    buf[0] = pending;
+                    pending = 0;
+                    ws.send(buf.buffer);
+                }
             }
         }, {passive: false});
 
-        document.addEventListener('touchend', () => { lastY = null });
+        document.addEventListener('touchend', () => { lastY = null; pending = 0 });
     </script>
 </body>
 </html>
@@ -61,12 +69,15 @@ async def ws_handler(req):
     ws = web.WebSocketResponse(compress=False)
     await ws.prepare(req)
     acc = 0.
-    async for msg in ws:
-        acc += struct.unpack('<f', msg.data)[0] * 6
-        if ticks := int(acc):
-            ui.write(e.EV_REL, e.REL_WHEEL_HI_RES, ticks)
-            ui.syn()
-            acc -= ticks
+    try:
+        async for msg in ws:
+            acc += struct.unpack('<f', msg.data)[0] * 6
+            if ticks := int(acc):
+                ui.write(e.EV_REL, e.REL_WHEEL_HI_RES, ticks)
+                ui.syn()
+                acc -= ticks
+    except asyncio.CancelledError:
+        pass
     return ws
 
 app = web.Application()
