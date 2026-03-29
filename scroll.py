@@ -1,93 +1,79 @@
 #!/usr/bin/python
 
+import struct
 from aiohttp import web
 from evdev import UInput, ecodes as e
 
-HTML_CONTENT = '''
+HTML = '''
+<!doctype html>
 <html>
-    <body>
-        <div id='status'>⚠</div>
-        <button id='fs-btn'>⛶</button>
-    </body>
+<head>
+    <meta charset=utf-8>
+    <meta name=viewport content="width=device-width">
     <style>
-        body {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          margin: 0;
-          height: 100%;
-          background: black;
-          user-select: none;
-        }
-        #status {
-          color: white;
-          font-size: 20vw;
-        }
-        #fs-btn {
-          position: fixed;
-          top: 15px;
-          right: 15px;
-          border: none;
-          background: none;
-          color: white;
-          font-size: 5vw;
-          line-height: 1;
-        }
+        html, body { height: 100%; margin: 0 }
+        body { display: flex; align-items: center; justify-content: center; background: black; user-select: none }
+        #st { color: white; font-size: 20vw }
+        #fs { position: fixed; top: 15px; right: 15px; border: none; background: none; color: white; font-size: 5vw }
     </style>
+</head>
+<body>
+    <div id=st>⚠</div>
+    <button id=fs>⛶</button>
     <script>
-        document.getElementById('fs-btn').addEventListener('click', () => {
-            document.fullscreenElement
-                ? document.exitFullscreen()
-                : document.documentElement.requestFullscreen();
-        });
+        fs.onclick = () =>
+            document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
 
-        const status = document.getElementById('status');
-
-        let ws = new WebSocket('ws://' + location.host + '/ws');
-        ws.onopen = () => { status.innerText = ''; };
-        ws.onclose = () => { status.innerText = '⚠'; };
-        ws.onerror = () => { ws.close(); }
+        const ws = new WebSocket('ws://' + location.host + '/ws');
+        ws.onopen = () => { st.innerText = '' };
+        ws.onclose = () => { st.innerText = '⚠' };
+        ws.onerror = () => ws.close();
 
         let lastY = null;
+        const buf = new Float32Array(1);
 
-        document.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 1)
-                lastY = e.touches[0].clientY;
-        }, {passive: false});
+        document.addEventListener('touchstart', e => {
+            if (e.touches.length === 1) lastY = e.touches[0].clientY;
+        });
 
-        document.addEventListener('touchmove', (e) => {
+        document.addEventListener('touchmove', e => {
             e.preventDefault();
-            if (e.touches.length === 1 && lastY !== null) {
-                if (ws.readyState === WebSocket.OPEN)
-                    ws.send(e.touches[0].clientY - lastY);
+            if (lastY !== null && e.touches.length === 1 && ws.readyState === 1) {
+                buf[0] = e.touches[0].clientY - lastY;
                 lastY = e.touches[0].clientY;
+                ws.send(buf.buffer);
             }
         }, {passive: false});
 
-        document.addEventListener('touchend', () => { lastY = null; });
+        document.addEventListener('touchend', () => { lastY = null });
     </script>
+</body>
 </html>
 '''
 
-ui = UInput({ e.EV_REL: [e.REL_WHEEL_HI_RES], e.EV_KEY: [e.BTN_LEFT, e.BTN_RIGHT] }, name='wifi-scroll')
-print('Virtual device: ', ui.name)
+ui = UInput({e.EV_REL: [e.REL_WHEEL_HI_RES], e.EV_KEY: [e.BTN_LEFT, e.BTN_RIGHT]}, name='wifi-scroll')
+print('Virtual device:', ui.name)
 
-async def index(request):
-    return web.Response(text=HTML_CONTENT, content_type='text/html')
+async def index(req):
+    return web.Response(text=HTML, content_type='text/html', headers={'Cache-Control': 'no-store'})
 
-async def ws_handler(request):
-    ws = web.WebSocketResponse()
-    await ws.prepare(request)
+async def ws_handler(req):
+    ws = web.WebSocketResponse(compress=False)
+    await ws.prepare(req)
     acc = 0.
     async for msg in ws:
-        acc += float(msg.data) * 6
-        ia = int(acc)
-        if ia != 0:
-            ui.write(e.EV_REL, e.REL_WHEEL_HI_RES, ia)
-            acc -= ia
-        ui.syn()
+        acc += struct.unpack('<f', msg.data)[0] * 6
+        if ticks := int(acc):
+            ui.write(e.EV_REL, e.REL_WHEEL_HI_RES, ticks)
+            ui.syn()
+            acc -= ticks
     return ws
 
 app = web.Application()
 app.add_routes([web.get('/', index), web.get('/ws', ws_handler)])
-web.run_app(app, port=12687, print=None)
+try:
+    web.run_app(app, port=12687, print=None, access_log=None)
+except KeyboardInterrupt:
+    pass
+finally:
+    ui.close()

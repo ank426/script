@@ -34,7 +34,7 @@ case "$mime_type" in
     inode/x-empty)
         ;;
 
-    text/* | application/mbox | application/javascript)
+    text/* | application/mbox | application/javascript | application/x-wine-extension-ini)
         # glow won't color to pipe cuz of bug
         bat --terminal-width "$w" --color=always --style=plain "$1"
         ;;

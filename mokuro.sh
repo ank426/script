@@ -31,18 +31,18 @@ for path in "$@"; do
         rm -f "$mokuro_file"
         continue
     fi
-    jq '
-      .pages |= [.[] | .blocks |= [
-        .[] | select(.lines | any(test("\\p{Hiragana}|\\p{Katakana}|\\p{Han}")))
-        | .vertical as $v
-        | .lines |= [.[]
-          | gsub("！！"; "‼")
-          | gsub("！？"; "⁉")
-          | gsub("？！"; "⁈")
-          | gsub("？？"; "⁇")
-          | gsub("．．．"; if $v then "︙" else "…" end)
-          | gsub("．．"; if $v then "︰" else "‥" end)
-        ]
-      ]]
-    ' "$mokuro_file" > "$mokuro_file.tmp" && mv "$mokuro_file.tmp" "$mokuro_file"
+    # jq '
+    #   .pages |= [.[] | .blocks |= [
+    #     .[] | select(.lines | any(test("\\p{Hiragana}|\\p{Katakana}|\\p{Han}")))
+    #     | .vertical as $v
+    #     | .lines |= [.[]
+    #       | gsub("！！"; "‼")
+    #       | gsub("！？"; "⁉")
+    #       | gsub("？！"; "⁈")
+    #       | gsub("？？"; "⁇")
+    #       | gsub("．．．"; if $v then "︙" else "…" end)
+    #       | gsub("．．"; if $v then "︰" else "‥" end)
+    #     ]
+    #   ]]
+    # ' "$mokuro_file" > "$mokuro_file.tmp" && mv "$mokuro_file.tmp" "$mokuro_file"
 done
