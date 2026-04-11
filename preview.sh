@@ -10,6 +10,9 @@ if [ -d "$XDG_CONFIG_HOME/libreoffice" ] && ls --almost-all "$XDG_CONFIG_HOME/li
     cp --recursive "$XDG_CONFIG_HOME/libreoffice/"* $LO_TEMP_DIR # it might be better to save a minimal profile for this
 fi
 
+resolved=$(realpath "$1")
+shift
+
 (
     exec 10< "$XDG_DATA_HOME/../script/seccomp/bwrap-tiocsti.bpf"
     exec bwrap \
@@ -17,11 +20,11 @@ fi
         --tmpfs /tmp \
         --tmpfs "$HOME" \
         --bind "$LO_TEMP_DIR" "$XDG_CONFIG_HOME/libreoffice" \
-        --ro-bind "$(realpath --no-symlinks "$1")" "$(realpath --no-symlinks "$1")" \
+        --ro-bind "$resolved" "$resolved" \
         --ro-bind "$XDG_DATA_HOME/../script/_preview.sh" "$XDG_DATA_HOME/../script/_preview.sh" \
         --proc /proc \
         --dev /dev \
         --unshare-all \
         --seccomp 10 \
-        "$XDG_DATA_HOME/../script/_preview.sh" "$@"
+        "$XDG_DATA_HOME/../script/_preview.sh" "$resolved" "$@"
 )
