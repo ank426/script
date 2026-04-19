@@ -1,10 +1,13 @@
 #!/usr/bin/python
 
-import asyncio, struct
-from aiohttp import web
-from evdev import UInput, ecodes as e
+import asyncio
+from struct import Struct
 
-HTML = '''
+from aiohttp import web
+from evdev import UInput
+from evdev import ecodes as e
+
+HTML = """
 <!doctype html>
 <html>
 <head>
@@ -57,21 +60,26 @@ HTML = '''
     </script>
 </body>
 </html>
-'''
+"""
 
-ui = UInput({e.EV_REL: [e.REL_WHEEL_HI_RES], e.EV_KEY: [e.BTN_LEFT, e.BTN_RIGHT]}, name='wifi-scroll')
-print('Virtual device:', ui.name)
+ui = UInput({e.EV_REL: [e.REL_WHEEL_HI_RES], e.EV_KEY: [e.BTN_LEFT, e.BTN_RIGHT]}, name="wifi-scroll")
+print("Virtual device:", ui.name)
 
-async def index(req):
-    return web.Response(text=HTML, content_type='text/html', headers={'Cache-Control': 'no-store'})
 
-async def ws_handler(req):
+async def index(_req: web.Request) -> web.Response:
+    return web.Response(text=HTML, content_type="text/html", headers={"Cache-Control": "no-store"})
+
+
+_float = Struct("<f")
+
+
+async def ws_handler(req: web.Request) -> web.WebSocketResponse:
     ws = web.WebSocketResponse(compress=False)
     await ws.prepare(req)
-    acc = 0.
+    acc = 0.0
     try:
         async for msg in ws:
-            acc += struct.unpack('<f', msg.data)[0] * 6
+            acc += _float.unpack(msg.data)[0] * 6
             if ticks := int(acc):
                 ui.write(e.EV_REL, e.REL_WHEEL_HI_RES, ticks)
                 ui.syn()
@@ -80,8 +88,9 @@ async def ws_handler(req):
         pass
     return ws
 
+
 app = web.Application()
-app.add_routes([web.get('/', index), web.get('/ws', ws_handler)])
+app.add_routes([web.get("/", index), web.get("/ws", ws_handler)])
 try:
     web.run_app(app, port=12687, print=None, access_log=None)
 except KeyboardInterrupt:
