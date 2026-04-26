@@ -16,7 +16,7 @@ fi
 
 disp_img() {
     # threshold needed for lf to not have strip of prev image
-    chafa --format sixel --scale max --view-size "$w"x"$h" --threshold 1 ${2:-} "$1"
+    chafa --format sixel --scale max --view-size "$w"x"$h" --threshold 1 --probe off ${2:-} "$1"
 }
 
 [ -n "$1" ]
