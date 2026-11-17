@@ -1,0 +1,48 @@
+#!/usr/sbin/nft -f
+# VPN kill switch for AirVPN (works with OpenVPN3, classic OpenVPN, or WireGuard)
+#
+# Idea: drop all traffic that doesn't go through the VPN interface, except the
+# handshake traffic to the VPN server itself, loopback and DHCP.
+#
+# Edit these three lines to match your setup:
+#   vpn_if      - tunnel interface name (check with: ip -br a)
+#   vpn_servers - EVERY remote IP in your .ovpn (check with: grep ^remote file.ovpn)
+#   vpn_port    - the port from those remote lines (443 for your config)
+
+define vpn_if      = "tun0"
+define vpn_servers = { 198.44.133.78, 198.54.129.125 }
+define vpn_port    = 443
+
+# Recreate the table cleanly each time the file is loaded
+add table inet vpnkill
+delete table inet vpnkill
+
+table inet vpnkill {
+
+    chain output {
+        type filter hook output priority 0; policy drop;
+
+        oifname "lo" accept
+        oifname $vpn_if accept
+
+        # Reach the VPN server on the physical interface (needed to connect/reconnect)
+        ip daddr $vpn_servers meta l4proto { tcp, udp } th dport $vpn_port accept
+
+        # DHCP so your Wi-Fi/Ethernet lease can renew
+        udp sport 68 udp dport 67 accept
+
+        # Optional: allow your local network (printers, NAS, router page).
+        # Uncomment and adjust to your LAN range; this bypasses the VPN for those addresses.
+        # ip daddr 172.16.0.0/12 accept
+        # ip daddr 192.168.0.0/16 accept
+    }
+
+    chain input {
+        type filter hook input priority 0; policy drop;
+
+        iifname "lo" accept
+        iifname $vpn_if accept
+        ct state established,related accept
+        udp sport 67 udp dport 68 accept
+    }
+}
